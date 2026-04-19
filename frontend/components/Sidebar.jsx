@@ -1,15 +1,32 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useConversation } from './LayoutWrapper';
 
 const Sidebar = ({ subtext = "The Ethereal Archive", links = [] }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const { conversations, activeConversationId, setActiveConversationId } = useConversation();
 
   const handleLogout = (e) => {
     e.preventDefault();
     localStorage.removeItem('atlas_role');
+    localStorage.removeItem('atlas_token');
     router.push('/login');
+  };
+
+  const startNewChat = () => {
+    setActiveConversationId(null);
+    router.push('/chat');
+  };
+
+  const selectConversation = (id) => {
+    setActiveConversationId(id);
+    if (pathname !== '/chat') {
+        router.push('/chat');
+    }
   };
 
   return (
@@ -29,15 +46,36 @@ const Sidebar = ({ subtext = "The Ethereal Archive", links = [] }) => {
             <p className="font-body text-xs text-on-surface-variant opacity-80">{subtext}</p>
           </div>
         </div>
-        <button onClick={() => router.push('/chat')} className="w-full py-3 px-4 rounded-xl font-label text-sm font-medium flex items-center justify-center gap-2 bg-gradient-to-br from-primary to-primary-container text-on-primary hover:opacity-90 transition-opacity">
+        <button onClick={startNewChat} className="w-full py-3 px-4 rounded-xl font-label text-sm font-medium flex items-center justify-center gap-2 bg-gradient-to-br from-primary to-primary-container text-on-primary hover:opacity-90 transition-opacity">
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>add</span>
           New Inquiry
         </button>
       </div>
 
-      {/* Navigation Links */}
-      <div className="flex-1 overflow-y-auto px-2 space-y-1 mt-4">
+      {/* Navigation Links / History */}
+      <div className="flex-1 overflow-y-auto px-2 space-y-1 mt-4 ethereal-scrollbar">
         {links.map((link, index) => {
+          if (link.isHistory) {
+              return (
+                <div key="history-section" className="mt-4">
+                    <p className="px-4 mb-2 text-[10px] font-label font-bold uppercase tracking-[0.2em] text-on-surface-variant opacity-50">Recent Explorations</p>
+                    {conversations.map((conv) => (
+                        <button
+                            key={conv.id}
+                            onClick={() => selectConversation(conv.id)}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all mb-1 ${activeConversationId === conv.id ? 'bg-cyan-400/20 text-cyan-100 glass-bezel' : 'text-cyan-100/50 hover:bg-white/5 hover:text-cyan-50'}`}
+                        >
+                            <span className="material-symbols-outlined text-sm">history</span>
+                            <span className="font-label text-xs tracking-wide truncate text-left">{conv.title}</span>
+                        </button>
+                    ))}
+                    {conversations.length === 0 && (
+                        <p className="px-4 py-2 text-[10px] italic text-on-surface-variant opacity-30">No archives yet.</p>
+                    )}
+                </div>
+              );
+          }
+          
           const isActive = pathname === link.href;
           return (
             <Link 

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import LayoutWrapper, { useSubject } from '../../components/LayoutWrapper';
-import { sendMessageStream } from '../../lib/api';
+import LayoutWrapper, { useSubject, useConversation } from '../../components/LayoutWrapper';
+import { sendMessageStream, getConversationMessages } from '../../lib/api';
 import ChatMessage from '../../components/ChatMessage';
 
 export default function ChatPage() {
@@ -15,16 +15,43 @@ export default function ChatPage() {
 
 function ChatUI() {
   const { selectedSubject } = useSubject();
-  const [messages, setMessages] = useState([
-    {
-      role: 'tutor',
-      text: "Greetings. I am Atlas, your guide through this archive. How can I assist your study today?",
-      title: "The Ethereal Archive"
-    }
-  ]);
+  const { activeConversationId, setActiveConversationId, refreshConversations } = useConversation();
+  
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
+
+  const welcomeMessage = {
+    role: 'tutor',
+    text: "Greetings. I am Atlas, your guide through this archive. How can I assist your study today?",
+    title: "The Ethereal Archive"
+  };
+
+  useEffect(() => {
+    const loadConversation = async () => {
+      if (activeConversationId) {
+        try {
+          const history = await getConversationMessages(activeConversationId);
+          if (history.length > 0) {
+            const formattedMessages = history.flatMap(h => [
+              { role: 'student', text: h.query },
+              { role: 'tutor', text: h.response }
+            ]);
+            setMessages(formattedMessages);
+          } else {
+            setMessages([welcomeMessage]);
+          }
+        } catch (err) {
+          console.error("Failed to fetch conversation messages", err);
+          setMessages([welcomeMessage]);
+        }
+      } else {
+        setMessages([welcomeMessage]);
+      }
+    };
+    loadConversation();
+  }, [activeConversationId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -48,13 +75,22 @@ function ChatUI() {
     setMessages(prev => [...prev, { role: 'tutor', text: "" }]);
 
     try {
-      await sendMessageStream(userMessage, selectedSubject, (fullText) => {
-        setMessages(prev => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1].text = fullText;
-          return newMessages;
-        });
-      });
+      await sendMessageStream(
+        userMessage, 
+        selectedSubject, 
+        activeConversationId, 
+        (fullText) => {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1].text = fullText;
+            return newMessages;
+          });
+        },
+        (newId) => {
+          setActiveConversationId(newId);
+          refreshConversations();
+        }
+      );
     } catch (err) {
       setMessages(prev => {
         const newMessages = [...prev];
@@ -72,7 +108,7 @@ function ChatUI() {
 
   return (
     <div className="flex flex-col h-full relative bg-background overflow-hidden">
-      {/* Subject Header - More integrated */}
+      {/* Subject Header */}
       <div className="flex-shrink-0 flex items-center justify-between px-8 py-4 border-b border-outline-variant/10 bg-surface-container-low/30 backdrop-blur-md z-20">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>

@@ -20,6 +20,7 @@ export default function LoginPage() {
 
     try {
       const data = await loginUser(email, password);
+      localStorage.setItem('atlas_token', data.access_token);
       localStorage.setItem('atlas_role', data.role);
       
       if (data.role === "admin") {

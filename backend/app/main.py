@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, upload, library, chat
+from app.database import engine, Base
 import logging
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 # Configure logging
 logging.basicConfig(
@@ -18,6 +22,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Conversation-ID"],
 )
 
 # Include routers

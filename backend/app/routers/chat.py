@@ -1,8 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from app.services.gemini_service import gemini_service
 from app.services.chroma_service import chroma_service
+from app.database import get_db
+from app.models import ChatHistory, User, Conversation
+from app.routers.auth import get_current_user
+from typing import Optional
 import logging
 import json
 import asyncio
@@ -13,42 +18,114 @@ router = APIRouter(tags=["chat"])
 class ChatRequest(BaseModel):
     message: str
     subject: str = "all"
+    conversation_id: Optional[str] = None
 
 @router.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        logger.info(f"Chat query: {request.message} (Subject: {request.subject})")
+        logger.info(f"Chat query by {current_user.email}: {request.message} (Subject: {request.subject})")
         
-        # 1. Get embedding for the query
+        # 1. Handle Conversation
+        if request.conversation_id:
+            conversation = db.query(Conversation).filter(
+                Conversation.id == request.conversation_id, 
+                Conversation.user_id == current_user.id
+            ).first()
+            if not conversation:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+        else:
+            # Create new conversation if no ID provided
+            # Use first 30 chars of message as title
+            title = request.message[:30] + ("..." if len(request.message) > 30 else "")
+            conversation = Conversation(user_id=current_user.id, title=title)
+            db.add(conversation)
+            db.commit()
+            db.refresh(conversation)
+
+        # 2. Get embedding for the query
         query_embedding = gemini_service.get_query_embedding(request.message)
         
-        # 2. Retrieve relevant context from ChromaDB with subject filter
+        # 3. Retrieve relevant context from ChromaDB with subject filter
         relevant_chunks = chroma_service.query_docs(query_embedding, subject=request.subject)
         context = "\n\n".join(relevant_chunks)
         
-        # 3. Build RAG prompt
+        # 4. Build RAG prompt
         prompt = f"""
-You are Atlas, an expert AI tutor. Your goal is to help the user understand the concepts in their archive.
+You are Atlas, an expert AI tutor. Your primary authority is the "Academic Syllabus" represented by the provided archive materials.
 
-Context from the archive:
+Context from the Academic Syllabus:
 {context}
 
 Question:
 {request.message}
 
-Instructions:
-1. Primary Source: Use the provided context to answer the question as accurately as possible.
-2. Handling Gaps: If the context doesn't explicitly contain the full answer but the topic is related to the context (e.g., mathematical foundations of a topic), use your general knowledge to provide a comprehensive answer, connecting it to the concepts found in the materials.
-3. Out-of-Scope: If the question is completely unrelated to the archive context, answer it helpfully using your general knowledge, but briefly mention that this specific topic is not covered in the archive.
-4. Tone: Be encouraging, academic yet accessible, and avoid robotic phrases like "Based on the provided archive, I don't know". Integrate the archive context seamlessly into your explanation.
+Syllabus Grounding Instructions:
+1. Primary Authority: Your answers must be primarily grounded in the provided archive context. Treat this context as the student's official syllabus.
+2. Handling Out-of-Syllabus Topics: If the question is about a topic not present in the Academic Syllabus:
+   - Clearly and explicitly state that this specific topic is not covered in the current archive/syllabus.
+   - You may provide a concise, high-level overview of the external topic to remain helpful, but prioritize brevity for non-syllabus content.
+   - Pivot the conversation back to the syllabus by explaining how the topic relates to, contrasts with, or depends on concepts that ARE in the archive.
+3. Gap Filling: If the syllabus contains related foundational concepts but not the specific answer, use your general knowledge to bridge the gap, but always make the connection to the archive materials explicit.
+4. Tone & Persona: Maintain an academic, encouraging, and vitreous persona. Avoid robotic "I don't know" phrases; instead, guide the student through what is available while maintaining clear boundaries between the syllabus and general knowledge.
 """
         
-        # 4. Stream response using Gemini
+        # 5. Generate response and save to history
+        full_response = ""
+        async def stream_and_collect():
+            nonlocal full_response
+            async for chunk in gemini_service.generate_response_stream(prompt):
+                full_response += chunk
+                yield chunk
+            
+            # Save to DB after stream completes
+            try:
+                new_chat = ChatHistory(
+                    conversation_id=conversation.id,
+                    query=request.message,
+                    response=full_response
+                )
+                db.add(new_chat)
+                db.commit()
+                logger.info(f"Saved chat interaction for conversation {conversation.id}")
+            except Exception as e:
+                logger.error(f"Error saving chat history: {e}")
+
         return StreamingResponse(
-            gemini_service.generate_response_stream(prompt),
+            stream_and_collect(),
+            headers={"X-Conversation-ID": str(conversation.id)},
             media_type="text/plain"
         )
 
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/conversations")
+async def get_conversations(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    conversations = db.query(Conversation).filter(
+        Conversation.user_id == current_user.id
+    ).order_by(Conversation.created_at.desc()).all()
+    return [{
+        "id": str(c.id),
+        "title": c.title,
+        "created_at": c.created_at
+    } for c in conversations]
+
+@router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id, 
+        Conversation.user_id == current_user.id
+    ).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    messages = db.query(ChatHistory).filter(
+        ChatHistory.conversation_id == conversation.id
+    ).order_by(ChatHistory.created_at.asc()).all()
+    
+    return [{
+        "query": m.query,
+        "response": m.response,
+        "timestamp": m.created_at
+    } for m in messages]
