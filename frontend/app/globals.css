@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0c1516;
+  --foreground: #dae4e5;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.glass-bezel {
+    box-shadow: inset 1px 1px 0px 0px rgba(218, 228, 229, 0.1), inset -1px -1px 0px 0px rgba(63, 72, 73, 0.05);
+}
+
+.ghost-border {
+    border: 1px solid rgba(63, 72, 73, 0.15);
+}
+
+.ambient-glow {
+    position: absolute;
+    top: -20%;
+    right: -10%;
+    width: 70vw;
+    height: 70vw;
+    border-radius: 50%;
+    background: radial-gradient(circle, #004e59 0%, transparent 60%);
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(100px);
+}
+
+.ethereal-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(85, 215, 237, 0.1) transparent;
+}
+
+.glass-panel {
+    @apply bg-surface-variant/30 backdrop-blur-3xl;
+    box-shadow: inset 1px 1px 0 0 rgba(218, 228, 229, 0.1), inset -1px -1px 0 0 rgba(63, 72, 73, 0.05), 0 32px 64px -16px rgba(7, 16, 17, 0.8);
+}
+
+.input-glow:focus-within {
+    box-shadow: 0 0 0 2px rgba(85, 215, 237, 0.1);
+}
+
+.markdown-content strong {
+    font-weight: 600;
+    color: #9eefff;
+}
+
+.markdown-content p {
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content p:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-content ul, .markdown-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content li {
+    margin-bottom: 0.25rem;
+}
+
+.markdown-content ul {
+    list-style-type: disc;
+}
+
+.markdown-content ol {
+    list-style-type: decimal;
+}
+
+/* Custom Scrollbar for Ethereal UI */
+.ethereal-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ethereal-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ethereal-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(85, 215, 237, 0.1);
+    border-radius: 10px;
+}
+
+.ethereal-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(85, 215, 237, 0.2);
+}
+
+/* Academic Typography Enhancements */
+.markdown-content h1, .markdown-content h2, .markdown-content h3 {
+    color: #55d7ed;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-family: "Newsreader", serif;
+}
+
+.markdown-content code {
+    background: rgba(85, 215, 237, 0.05);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.9em;
+    border: 1px solid rgba(85, 215, 237, 0.1);
+}
+
+.markdown-content pre {
+    background: #071011;
+    padding: 1rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    overflow-x: auto;
+    border: 1px solid rgba(85, 215, 237, 0.1);
+}
+
+.markdown-content pre code {
+    background: transparent;
+    padding: 0;
+    border: none;
+    color: #dae4e5;
+}
+
+.markdown-content blockquote {
+    border-left: 3px solid #55d7ed;
+    padding-left: 1rem;
+    font-style: italic;
+    color: rgba(218, 228, 229, 0.7);
+    margin: 1rem 0;
+}
