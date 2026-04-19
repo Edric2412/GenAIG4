@@ -40,6 +40,9 @@ GEMINI_API_KEY=your_key_here
 CHROMA_DB_PATH=./chroma_db
 UPLOADS_DIR=./uploads
 DATABASE_URL=sqlite:///./atlas_tutor.db
+SECRET_KEY=your_secret_key_here_for_demo
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=480
 ```
 
 Run migrations and start the server:

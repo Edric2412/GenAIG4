@@ -4,20 +4,41 @@ import React, { useEffect, useState, createContext, useContext } from 'react';
 import Sidebar from './Sidebar';
 import TopNavbar from './TopNavbar';
 import { usePathname, useRouter } from 'next/navigation';
+import { getConversations } from '../lib/api';
 
 export const SubjectContext = createContext({
   selectedSubject: 'all',
   setSelectedSubject: () => {}
 });
 
+export const ConversationContext = createContext({
+  conversations: [],
+  setConversations: () => {},
+  activeConversationId: null,
+  setActiveConversationId: () => {},
+  refreshConversations: () => {}
+});
+
 export const useSubject = () => useContext(SubjectContext);
+export const useConversation = () => useContext(ConversationContext);
 
 export default function LayoutWrapper({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [role, setRole] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState('all');
+  const [conversations, setConversations] = useState([]);
+  const [activeConversationId, setActiveConversationId] = useState(null);
   
+  const refreshConversations = async () => {
+    try {
+      const data = await getConversations();
+      setConversations(data);
+    } catch (err) {
+      console.error("Failed to fetch conversations", err);
+    }
+  };
+
   useEffect(() => {
     const savedRole = localStorage.getItem('atlas_role');
     if (!savedRole) {
@@ -25,6 +46,10 @@ export default function LayoutWrapper({ children }) {
       return;
     }
     setRole(savedRole);
+
+    if (savedRole === 'student') {
+        refreshConversations();
+    }
 
     // Strict role protection
     if (savedRole === 'student' && (pathname === '/upload' || pathname === '/library')) {
@@ -38,7 +63,7 @@ export default function LayoutWrapper({ children }) {
   if (!role) return null;
 
   const studentLinks = [
-    { icon: 'chat_bubble', label: 'Current Session', href: '/chat' },
+    { icon: 'chat_bubble', label: 'History', isHistory: true },
   ];
 
   const adminLinks = [
@@ -50,33 +75,39 @@ export default function LayoutWrapper({ children }) {
 
   return (
     <SubjectContext.Provider value={{ selectedSubject, setSelectedSubject }}>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
-        {/* Sidebar - No longer fixed, just a flex item */}
-        <div className="hidden md:block w-72 h-full flex-shrink-0">
-          <Sidebar 
-            subtext={role === 'admin' ? "Management Portal" : "The Ethereal Archive"} 
-            links={links} 
-          />
-        </div>
-
-        <div className="flex-1 flex flex-col relative h-full min-w-0">
-          {/* Abstract Background Glow */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-            <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px]"></div>
-            <div className="absolute bottom-[-10%] left-[20%] w-[60%] h-[60%] rounded-full bg-tertiary/5 blur-[150px]"></div>
+      <ConversationContext.Provider value={{ 
+        conversations, 
+        setConversations, 
+        activeConversationId, 
+        setActiveConversationId,
+        refreshConversations
+      }}>
+        <div className="flex h-screen w-full bg-background overflow-hidden">
+          <div className="hidden md:block w-72 h-full flex-shrink-0">
+            <Sidebar 
+              subtext={role === 'admin' ? "Management Portal" : "The Ethereal Archive"} 
+              links={links} 
+            />
           </div>
-          
-          <TopNavbar 
-            showSearch={pathname === '/library' || pathname === '/upload'} 
-            profileImg={role === 'admin' ? "https://lh3.googleusercontent.com/aida-public/AB6AXuD1vIGhjLw2F3I7I973UsGUe4Jba4YF59_pf3CzrTsAies38Yw5hrcZmbw5wUHhmf5ANRcDGUjZ1jLOlhSfixJfOz3UvpqeckeuxMjru-oOYGNiuxTqAKKNFsolsPffAoDGrSJ8O0OaCtfLO4eAblCA2ITGI9TG9tlKSEJ2-84SO_r9wP96ovjbUygnqmE1ZubbVfmVn-3q1FceapeEeKFBfHiXfs2Uj9WvUbbcfocTyMUQMVgxr0b7jaOgYrv7cFVs0nfE4gO87XE" : undefined}
-            onSubjectChange={setSelectedSubject}
-          />
-          
-          <main className="flex-1 z-10 relative overflow-hidden flex flex-col">
-            {children}
-          </main>
+
+          <div className="flex-1 flex flex-col relative h-full min-w-0">
+            <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+              <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px]"></div>
+              <div className="absolute bottom-[-10%] left-[20%] w-[60%] h-[60%] rounded-full bg-tertiary/5 blur-[150px]"></div>
+            </div>
+            
+            <TopNavbar 
+              showSearch={pathname === '/library' || pathname === '/upload'} 
+              profileImg={role === 'admin' ? "https://lh3.googleusercontent.com/aida-public/AB6AXuD1vIGhjLw2F3I7I973UsGUe4Jba4YF59_pf3CzrTsAies38Yw5hrcZmbw5wUHhmf5ANRcDGUjZ1jLOlhSfixJfOz3UvpqeckeuxMjru-oOYGNiuxTqAKKNFsolsPffAoDGrSJ8O0OaCtfLO4eAblCA2ITGI9TG9tlKSEJ2-84SO_r9wP96ovjbUygnqmE1ZubbVfmVn-3q1FceapeEeKFBfHiXfs2Uj9WvUbbcfocTyMUQMVgxr0b7jaOgYrv7cFVs0nfE4gO87XE" : undefined}
+              onSubjectChange={setSelectedSubject}
+            />
+            
+            <main className="flex-1 z-10 relative overflow-hidden flex flex-col">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      </ConversationContext.Provider>
     </SubjectContext.Provider>
   );
 }

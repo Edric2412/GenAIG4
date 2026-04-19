@@ -35,12 +35,12 @@ function LibraryUI() {
     fetchDocs();
   }, []);
 
-  const handleDelete = async (filename) => {
+  const handleDelete = async (id, filename) => {
     if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
-    
+
     try {
-      await deleteDocument(filename);
-      setDocuments(prev => prev.filter(doc => doc.filename !== filename));
+      await deleteDocument(id);
+      setDocuments(docs => docs.filter(doc => doc.id !== id));
     } catch (err) {
       alert('Failed to delete document.');
     }
@@ -112,7 +112,7 @@ function LibraryUI() {
                 </div>
                 <div className="flex justify-end gap-2">
                   <button 
-                    onClick={() => handleDelete(doc.filename)}
+                    onClick={() => handleDelete(doc.id, doc.filename)}
                     className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors" 
                     title="Delete"
                   >

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Document, Subject
+from app.models import Document, Subject, User
+from app.routers.auth import get_current_user
 from app.services.file_service import file_service
 from app.services.embedding_service import embedding_service
 from app.utils.loader import load_text
@@ -14,8 +15,11 @@ router = APIRouter(tags=["upload"])
 async def upload_document(
     file: UploadFile = File(...), 
     subject_name: str = Form("General"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can upload documents")
     try:
         logger.info(f"Uploading file: {file.filename} with subject: {subject_name}")
         
