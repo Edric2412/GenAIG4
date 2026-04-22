@@ -64,11 +64,13 @@ export default function LayoutWrapper({ children }) {
 
   const studentLinks = [
     { icon: 'chat_bubble', label: 'History', isHistory: true },
+    { icon: 'quiz', label: 'Quiz', href: '/quiz' }
   ];
 
   const adminLinks = [
     { icon: 'cloud_upload', label: 'Upload Center', href: '/upload' },
     { icon: 'auto_stories', label: 'Document Library', href: '/library' },
+    { icon: 'quiz', label: 'Quiz', href: '/quiz' }
   ];
 
   const links = role === 'admin' ? adminLinks : studentLinks;
