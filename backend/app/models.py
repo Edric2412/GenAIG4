@@ -48,3 +48,13 @@ class ChatHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     conversation = relationship("Conversation", back_populates="messages")
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id"))
+    topic = Column(String, nullable=False)
+    score = Column(Integer, nullable=False) # e.g. 4 out of 5
+    total_questions = Column(Integer, default=5)
+    difficulty = Column(String, default="Medium") # Easy, Medium, Hard
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

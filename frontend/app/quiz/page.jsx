@@ -27,6 +27,7 @@ function QuizUI() {
     setLoading(true);
     setError('');
     setQuiz(null);
+    setAnswers({});
     setSubmitted(false);
 
     try {
@@ -56,6 +57,7 @@ function QuizUI() {
   };
 
   const selectAnswer = (qIndex, option) => {
+    if (submitted) return;
     setAnswers({ ...answers, [qIndex]: option });
   };
 
@@ -65,6 +67,30 @@ function QuizUI() {
       if (answers[i] === q.answer) score++;
     });
     return score;
+  };
+
+  const handleQuizSubmit = async () => {
+    const score = calculateScore();
+    setSubmitted(true);
+
+    try {
+      await fetch('http://localhost:8000/quiz/result', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('atlas_token')}`,
+        },
+        body: JSON.stringify({
+          topic: quiz.topic,
+          score: score,
+          total_questions: quiz.questions.length,
+          difficulty: quiz.difficulty,
+        }),
+      });
+      console.log("Quiz result saved successfully");
+    } catch (err) {
+      console.error("Failed to save quiz result:", err);
+    }
   };
 
   return (
@@ -117,6 +143,19 @@ function QuizUI() {
           {/* QUIZ SECTION */}
           {quiz && (
             <div className="flex flex-col gap-6">
+              
+              <div className="flex justify-between items-center px-2">
+                <span className="text-[10px] font-label font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+                  Topic: <span className="text-primary">{quiz.topic}</span>
+                </span>
+                <span className={`text-[10px] font-label font-bold uppercase tracking-[0.2em] px-2 py-0.5 rounded border
+                  ${quiz.difficulty === 'Hard' ? 'text-red-400 border-red-400/30' : 
+                    quiz.difficulty === 'Easy' ? 'text-green-400 border-green-400/30' : 
+                    'text-blue-400 border-blue-400/30'}
+                `}>
+                  {quiz.difficulty}
+                </span>
+              </div>
 
               {quiz.questions.map((q, i) => (
                 <div
@@ -137,10 +176,12 @@ function QuizUI() {
                         <button
                           key={idx}
                           onClick={() => selectAnswer(i, opt)}
+                          disabled={submitted}
                           className={`text-left px-4 py-3 rounded-xl border transition-all
                             ${isSelected ? 'border-primary bg-primary/10' : 'border-outline-variant/20'}
                             ${isCorrect ? 'bg-green-500/10 border-green-400' : ''}
                             ${isWrong ? 'bg-red-500/10 border-red-400' : ''}
+                            ${submitted ? 'cursor-default' : 'hover:border-primary/50'}
                           `}
                         >
                           {opt}
@@ -166,14 +207,19 @@ function QuizUI() {
               {/* SUBMIT BUTTON */}
               {!submitted ? (
                 <button
-                  onClick={() => setSubmitted(true)}
+                  onClick={handleQuizSubmit}
                   className="bg-primary text-on-primary px-6 py-3 rounded-xl shadow-lg hover:scale-105 transition-all"
                 >
                   Submit Quiz
                 </button>
               ) : (
-                <div className="text-center text-xl font-headline text-primary">
-                  Score: {calculateScore()} / {quiz.questions.length}
+                <div className="text-center">
+                  <div className="text-xl font-headline text-primary">
+                    Score: {calculateScore()} / {quiz.questions.length}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-widest text-on-surface-variant/40 mt-2">
+                    Difficulty: {quiz.difficulty} • Result Recorded
+                  </div>
                 </div>
               )}
 

@@ -72,6 +72,22 @@ export async function getConversationMessages(conversationId) {
   return handleResponse(response);
 }
 
+export async function deleteConversation(conversationId) {
+  const response = await fetch(`${BASE_URL}/conversations/${conversationId}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(response);
+}
+
+export async function getNomicMap() {
+  const response = await fetch(`${BASE_URL}/nomic/map`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(response);
+}
+
 export async function sendMessageStream(message, subject = "all", conversationId = null, onChunk, onConversationCreated) {
   const response = await fetch(`${BASE_URL}/chat`, {
     method: 'POST',

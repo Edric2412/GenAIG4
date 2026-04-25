@@ -1,4 +1,5 @@
 import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from app.config import settings
 import logging
 
@@ -7,24 +8,49 @@ logger = logging.getLogger(__name__)
 class GeminiService:
     def __init__(self):
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel('gemini-3-flash-preview')
+        # Using the requested model gemini-2.5-flash
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # Optimized for a Tutor: High precision, lower creativity
+        self.generation_config = {
+            "temperature": 0.3,
+            "top_p": 0.8,
+            "top_k": 40,
+            "max_output_tokens": 8192,
+        }
+
+        # Safety settings to prevent buffering/blocking on educational content
+        self.safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
 
     async def generate_response(self, prompt: str) -> str:
         try:
-            response = self.model.generate_content(prompt)
+            response = await self.model.generate_content_async(
+                prompt, 
+                generation_config=self.generation_config,
+                safety_settings=self.safety_settings
+            )
             return response.text
         except Exception as e:
             logger.error(f"Error generating response from Gemini: {e}")
             return "I'm sorry, I couldn't generate a response at this time."
 
     async def generate_response_stream(self, prompt: str):
-        import asyncio
         try:
-            response = self.model.generate_content(prompt, stream=True)
-            for chunk in response:
+            # generate_content_async with stream=True is the key to faster TTFT
+            response = await self.model.generate_content_async(
+                prompt, 
+                stream=True,
+                generation_config=self.generation_config,
+                safety_settings=self.safety_settings
+            )
+            async for chunk in response:
                 if chunk.text:
                     yield chunk.text
-                    await asyncio.sleep(0.01)
         except Exception as e:
             logger.error(f"Error streaming response from Gemini: {e}")
             yield "I encountered an error accessing the archive. Please try again."

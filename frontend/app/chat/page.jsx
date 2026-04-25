@@ -29,8 +29,10 @@ function ChatUI() {
   };
 
   useEffect(() => {
+    // Only load conversation history if we are NOT currently sending a message
+    // to prevent overwriting the active streaming state.
     const loadConversation = async () => {
-      if (activeConversationId) {
+      if (activeConversationId && !loading) {
         try {
           const history = await getConversationMessages(activeConversationId);
           if (history.length > 0) {
@@ -46,12 +48,12 @@ function ChatUI() {
           console.error("Failed to fetch conversation messages", err);
           setMessages([welcomeMessage]);
         }
-      } else {
+      } else if (!activeConversationId && !loading) {
         setMessages([welcomeMessage]);
       }
     };
     loadConversation();
-  }, [activeConversationId]);
+  }, [activeConversationId, loading]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -106,6 +108,63 @@ function ChatUI() {
     }
   };
 
+  const handleRegenerate = async () => {
+    if (loading || messages.length < 2) return;
+
+    // Find the last student message
+    let lastStudentMessage = null;
+    let studentMsgIndex = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'student') {
+        lastStudentMessage = messages[i].text;
+        studentMsgIndex = i;
+        break;
+      }
+    }
+
+    if (!lastStudentMessage || studentMsgIndex === -1) return;
+
+    // Remove everything after the last student message
+    setMessages(prev => prev.slice(0, studentMsgIndex + 1));
+    
+    setLoading(true);
+    // Add placeholder for new tutor response
+    setMessages(prev => [...prev, { role: 'tutor', text: "" }]);
+
+    try {
+      await sendMessageStream(
+        lastStudentMessage, 
+        selectedSubject, 
+        activeConversationId, 
+        (fullText) => {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1].text = fullText;
+            return newMessages;
+          });
+        },
+        (newId) => {
+          if (!activeConversationId) {
+            setActiveConversationId(newId);
+            refreshConversations();
+          }
+        }
+      );
+    } catch (err) {
+      setMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = { 
+          role: 'tutor', 
+          text: "I encountered a disturbance in the archive connection. Please try again.",
+          isError: true
+        };
+        return newMessages;
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full relative bg-background overflow-hidden">
       {/* Subject Header */}
@@ -137,19 +196,9 @@ function ChatUI() {
                 message={msg} 
                 isLast={idx === messages.length - 1}
                 loading={loading}
+                onRegenerate={handleRegenerate}
               />
             ))}
-            
-            {loading && !messages[messages.length-1].text && (
-              <div className="animate-in fade-in duration-500">
-                <div className="flex items-center gap-3 mb-4 px-1">
-                  <div className="w-6 h-6 rounded-full bg-surface-container border border-outline-variant/20 animate-pulse"></div>
-                  <span className="text-[10px] font-label font-bold uppercase tracking-wider text-on-surface-variant/40 italic">
-                    Atlas is querying the archive...
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         </main>
       </div>
