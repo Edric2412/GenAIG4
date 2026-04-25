@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import LayoutWrapper, { useSubject } from '../../components/LayoutWrapper';
+import { generateQuiz as apiGenerateQuiz } from '../../lib/api';
 
 export default function QuizPage() {
   return (
@@ -30,23 +31,7 @@ function QuizUI() {
     setSubmitted(false);
 
     try {
-      const res = await fetch('http://localhost:8000/quiz', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('atlas_token')}`,
-        },
-        body: JSON.stringify({
-          topic,
-          subject: selectedSubject,
-          num_questions: 5,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.detail || 'Failed to generate quiz');
-
+      const data = await apiGenerateQuiz(topic, selectedSubject, 5);
       setQuiz(data);
     } catch (err) {
       setError(err.message);

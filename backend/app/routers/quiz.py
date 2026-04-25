@@ -35,10 +35,19 @@ class QuizResponse(BaseModel):
 # HELPER
 def safe_parse_json(text: str):
     try:
-        return json.loads(text)
-    except:
-        logger.error("Failed JSON parse, raw output: %s", text)
-        raise HTTPException(status_code=500, detail="LLM returned invalid JSON")
+        # Remove markdown code blocks if present
+        clean_text = text.strip()
+        if clean_text.startswith("```"):
+            # Find the first { and last }
+            start = clean_text.find("{")
+            end = clean_text.rfind("}")
+            if start != -1 and end != -1:
+                clean_text = clean_text[start:end+1]
+        
+        return json.loads(clean_text)
+    except Exception as e:
+        logger.error("Failed JSON parse: %s. Raw output: %s", str(e), text)
+        raise HTTPException(status_code=500, detail=f"LLM returned invalid JSON format: {str(e)}")
 
 # ROUTE 
 @router.post("/quiz", response_model=QuizResponse)
@@ -68,17 +77,17 @@ async def generate_quiz(
 
         # STRICT PROMPT
         prompt = f"""
-You are an AI tutor.
+You are an AI tutor. Your task is to generate a quiz specifically about the topic: "{req.topic}".
 
 Generate EXACTLY {req.num_questions} multiple-choice questions.
 
 STRICT RULES:
-- Use ONLY the context below
-- DO NOT use outside knowledge
-- If context is insufficient → return "INSUFFICIENT_CONTEXT"
-- Each question must have 4 options
-- Include correct answer and explanation
-- Keep answers factual and grounded
+- The questions MUST be about "{req.topic}".
+- Use ONLY the context provided below.
+- If the context is about a different subject or does not contain enough information to generate high-quality questions about "{req.topic}" → return ONLY the string "INSUFFICIENT_CONTEXT".
+- DO NOT use outside knowledge to fill gaps.
+- Each question must have 4 options.
+- Include correct answer and explanation.
 
 Context:
 {context}
@@ -99,6 +108,12 @@ Return STRICT JSON:
 
         # Generate
         response = await gemini_service.generate_response(prompt)
+
+        if "INSUFFICIENT_CONTEXT" in response:
+             raise HTTPException(
+                status_code=400,
+                detail="The archive does not contain enough information on this topic to generate a quiz."
+            )
 
         quiz_data = safe_parse_json(response)
 

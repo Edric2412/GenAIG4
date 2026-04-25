@@ -32,7 +32,7 @@ class ChromaService:
         logger.info(f"Stored {len(chunks)} chunks for {filename} (Subject: {subject}) in ChromaDB.")
         return doc_id
 
-    def query_docs(self, query_embedding: list[float], subject: str = None, n_results: int = 5):
+    def query_docs(self, query_embedding: list[float], subject: str = None, n_results: int = 5, distance_threshold: float = 0.8):
         where_filter = {"subject": subject} if subject and subject != "all" else None
         
         logger.info(f"Querying ChromaDB with subject filter: {subject}")
@@ -42,10 +42,17 @@ class ChromaService:
             where=where_filter
         )
         
+        relevant_docs = []
         if results['documents'] and results['documents'][0]:
-            logger.info(f"Retrieved {len(results['documents'][0])} relevant chunks.")
-            return results['documents'][0]
-        return []
+            # Chroma returns distances (lower is better/more similar)
+            # Default threshold 0.8 is conservative (varies by embedding model)
+            for i, distance in enumerate(results['distances'][0]):
+                if distance < distance_threshold:
+                    relevant_docs.append(results['documents'][0][i])
+            
+            logger.info(f"Retrieved {len(relevant_docs)} relevant chunks (below threshold {distance_threshold}).")
+        
+        return relevant_docs
 
     def list_documents(self):
         results = self.collection.get(include=['metadatas'])

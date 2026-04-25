@@ -105,3 +105,15 @@ export async function sendMessageStream(message, subject = "all", conversationId
     onChunk(fullText);
   }
 }
+
+export async function generateQuiz(topic, subject, numQuestions = 5) {
+  const response = await fetch(`${BASE_URL}/quiz`, {
+    method: 'POST',
+    headers: { 
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+    },
+    body: JSON.stringify({ topic, subject, num_questions: numQuestions }),
+  });
+  return handleResponse(response);
+}
