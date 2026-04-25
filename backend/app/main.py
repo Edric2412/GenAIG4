@@ -4,9 +4,6 @@ from app.routers import auth, upload, library, chat, quiz
 from app.database import engine, Base
 import logging
 
-# Create tables
-Base.metadata.create_all(bind=engine)
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
