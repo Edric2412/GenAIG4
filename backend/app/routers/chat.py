@@ -41,6 +41,18 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
             db.add(conversation)
             db.commit()
             db.refresh(conversation)
+        # 2. Fetch prior conversation history (last 5 turns)
+        prior_messages = db.query(ChatHistory).filter(
+            ChatHistory.conversation_id == conversation.id
+        ).order_by(ChatHistory.created_at.asc()).limit(5).all()
+
+        history_text = ""
+        if prior_messages:
+            history_lines = []
+            for msg in prior_messages:
+                history_lines.append(f"Student: {msg.query}")
+                history_lines.append(f"Atlas: {msg.response}")
+            history_text = "\n".join(history_lines)
 
         # 2. Get embedding for the query
         query_embedding = gemini_service.get_query_embedding(request.message)
@@ -51,22 +63,22 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
         
         # 4. Build RAG prompt
         prompt = f"""
-You are Atlas, an expert AI tutor. Your primary authority is the "Academic Syllabus" represented by the provided archive materials.
+YYou are Atlas, an expert AI tutor. Your primary authority is the "Academic Syllabus" represented by the provided archive materials.
 
 Context from the Academic Syllabus:
 {context}
 
-Question:
+{history_text}
+Current Question:
 {request.message}
 
 Syllabus Grounding Instructions:
 1. Primary Authority: Your answers must be primarily grounded in the provided archive context. Treat this context as the student's official syllabus.
 2. Handling Out-of-Syllabus Topics: If the question is about a topic not present in the Academic Syllabus:
-   - Clearly and explicitly state that this specific topic is not covered in the current archive/syllabus.
-   - You may provide a concise, high-level overview of the external topic to remain helpful, but prioritize brevity for non-syllabus content.
-   - Pivot the conversation back to the syllabus by explaining how the topic relates to, contrasts with, or depends on concepts that ARE in the archive.
-3. Gap Filling: If the syllabus contains related foundational concepts but not the specific answer, use your general knowledge to bridge the gap, but always make the connection to the archive materials explicit.
-4. Tone & Persona: Maintain an academic, encouraging, and vitreous persona. Avoid robotic "I don't know" phrases; instead, guide the student through what is available while maintaining clear boundaries between the syllabus and general knowledge.
+   - Clearly state that this specific topic is not covered in the current archive/syllabus.
+   - Do NOT answer from general knowledge.
+3. Memory: Use the previous conversation above to maintain context. If the student says "explain that again" or refers to something said earlier, use the conversation history to understand what they mean.
+4. Tone & Persona: Maintain an academic, encouraging persona.
 """
         
         # 5. Generate response and save to history
