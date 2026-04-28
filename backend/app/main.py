@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, upload, library, chat, quiz
 from app.database import engine, Base
-import logging
+import logging 
+from fastapi import FastAPI
 
 # Configure logging
 logging.basicConfig(
