@@ -36,7 +36,7 @@ function ChatUI() {
           if (history.length > 0) {
             const formattedMessages = history.flatMap(h => [
               { role: 'student', text: h.query },
-              { role: 'tutor', text: h.response }
+              { role: 'tutor', text: h.response, citations: h.citations }
             ]);
             setMessages(formattedMessages);
           } else {
@@ -89,6 +89,13 @@ function ChatUI() {
         (newId) => {
           setActiveConversationId(newId);
           refreshConversations();
+        },
+        (citations) => {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1].citations = citations;
+            return newMessages;
+          });
         }
       );
     } catch (err) {

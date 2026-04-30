@@ -53,6 +53,23 @@ export default function ChatMessage({ message, isLast, loading }) {
           )}
         </div>
 
+        {isTutor && message.citations && message.citations.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-outline-variant/5">
+            <span className="text-[10px] font-label font-bold uppercase tracking-wider text-on-surface-variant/50 flex items-center gap-1.5 mb-2">
+              <span className="material-symbols-outlined text-xs">library_books</span>
+              Referenced Sources
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {message.citations.map((cite, i) => (
+                <span key={i} className="flex items-center gap-1.5 bg-surface-container-high px-2.5 py-1 rounded-lg text-[10px] font-medium text-on-surface-variant/90 border border-outline-variant/10 transition-all hover:bg-surface-container-highest hover:border-primary/20 cursor-default">
+                  <span className="material-symbols-outlined text-[12px] opacity-60 text-primary">description</span>
+                  {cite}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isTutor && message.text && (
           <div className="mt-6 pt-4 border-t border-outline-variant/5 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             <div className="flex gap-1">
