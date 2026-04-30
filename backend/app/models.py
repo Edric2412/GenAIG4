@@ -45,6 +45,7 @@ class ChatHistory(Base):
     conversation_id = Column(String, ForeignKey("conversations.id"))
     query = Column(Text, nullable=False)
     response = Column(Text, nullable=False)
+    citations = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     conversation = relationship("Conversation", back_populates="messages")

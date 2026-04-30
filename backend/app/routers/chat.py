@@ -58,7 +58,36 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
         query_embedding = gemini_service.get_query_embedding(request.message)
         
         # 3. Retrieve relevant context from ChromaDB with subject filter
-        relevant_chunks = chroma_service.query_docs(query_embedding, subject=request.subject)
+        relevant_chunks, citations = chroma_service.query_docs(query_embedding, subject=request.subject)
+        
+        if not relevant_chunks:
+            # Safe no-answer behavior (Score gating / Refusal fallback)
+            fallback_msg = "I'm sorry, but I couldn't find any relevant information in your uploaded documents to answer this question. Please ensure the topic is covered in your archive."
+            
+            try:
+                new_chat = ChatHistory(
+                    conversation_id=conversation.id,
+                    query=request.message,
+                    response=fallback_msg,
+                    citations=json.dumps([])
+                )
+                db.add(new_chat)
+                db.commit()
+            except Exception as e:
+                logger.error(f"Error saving chat history: {e}")
+                
+            async def stream_fallback():
+                yield fallback_msg
+                
+            return StreamingResponse(
+                stream_fallback(),
+                headers={
+                    "X-Conversation-ID": str(conversation.id),
+                    "X-Citations": json.dumps([])
+                },
+                media_type="text/plain"
+            )
+
         context = "\n\n".join(relevant_chunks)
         
         # 4. Build RAG prompt
@@ -94,7 +123,8 @@ Syllabus Grounding Instructions:
                 new_chat = ChatHistory(
                     conversation_id=conversation.id,
                     query=request.message,
-                    response=full_response
+                    response=full_response,
+                    citations=json.dumps(citations)
                 )
                 db.add(new_chat)
                 db.commit()
@@ -104,7 +134,10 @@ Syllabus Grounding Instructions:
 
         return StreamingResponse(
             stream_and_collect(),
-            headers={"X-Conversation-ID": str(conversation.id)},
+            headers={
+                "X-Conversation-ID": str(conversation.id),
+                "X-Citations": json.dumps(citations)
+            },
             media_type="text/plain"
         )
 
@@ -139,5 +172,6 @@ async def get_conversation_messages(conversation_id: str, db: Session = Depends(
     return [{
         "query": m.query,
         "response": m.response,
-        "timestamp": m.created_at
+        "timestamp": m.created_at,
+        "citations": json.loads(m.citations) if m.citations else []
     } for m in messages]

@@ -43,16 +43,20 @@ class ChromaService:
         )
         
         relevant_docs = []
+        citations = []
         if results['documents'] and results['documents'][0]:
             # Chroma returns distances (lower is better/more similar)
             # Default threshold 0.8 is conservative (varies by embedding model)
             for i, distance in enumerate(results['distances'][0]):
                 if distance < distance_threshold:
                     relevant_docs.append(results['documents'][0][i])
+                    if 'metadatas' in results and results['metadatas'] and results['metadatas'][0]:
+                        citations.append(results['metadatas'][0][i]['filename'])
             
             logger.info(f"Retrieved {len(relevant_docs)} relevant chunks (below threshold {distance_threshold}).")
         
-        return relevant_docs
+        unique_citations = list(set(citations))
+        return relevant_docs, unique_citations
 
     def list_documents(self):
         results = self.collection.get(include=['metadatas'])

@@ -72,7 +72,7 @@ export async function getConversationMessages(conversationId) {
   return handleResponse(response);
 }
 
-export async function sendMessageStream(message, subject = "all", conversationId = null, onChunk, onConversationCreated) {
+export async function sendMessageStream(message, subject = "all", conversationId = null, onChunk, onConversationCreated, onCitations) {
   const response = await fetch(`${BASE_URL}/chat`, {
     method: 'POST',
     headers: { 
@@ -91,6 +91,16 @@ export async function sendMessageStream(message, subject = "all", conversationId
   const newConvId = response.headers.get('X-Conversation-ID');
   if (newConvId && newConvId !== conversationId && onConversationCreated) {
     onConversationCreated(newConvId);
+  }
+
+  const citationsStr = response.headers.get('X-Citations');
+  if (citationsStr && onCitations) {
+    try {
+      const citations = JSON.parse(citationsStr);
+      onCitations(citations);
+    } catch (e) {
+      console.error("Failed to parse citations", e);
+    }
   }
 
   const reader = response.body.getReader();
