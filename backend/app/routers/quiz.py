@@ -6,7 +6,7 @@ import json
 import logging
 
 from app.database import get_db
-from app.models import User
+from app.models import User, QuizAttempt
 from app.routers.auth import get_current_user
 from app.services.chroma_service import chroma_service
 from app.services.gemini_service import gemini_service
@@ -20,6 +20,7 @@ class QuizRequest(BaseModel):
     topic: str
     subject: str
     num_questions: int = 5
+    previous_score: int = 0
 
 class Question(BaseModel):
     question: str
@@ -27,35 +28,46 @@ class Question(BaseModel):
     answer: str
     explanation: str
     source: str
+    difficulty: str
 
 class QuizResponse(BaseModel):
     topic: str
+    difficulty: str
     questions: List[Question]
 
 # HELPER
 def safe_parse_json(text: str):
     try:
-        # Remove markdown code blocks if present
-        clean_text = text.strip()
-        if clean_text.startswith("```"):
-            # Find the first { and last }
-            start = clean_text.find("{")
-            end = clean_text.rfind("}")
-            if start != -1 and end != -1:
-                clean_text = clean_text[start:end+1]
-        
-        return json.loads(clean_text)
+        cleaned = text.strip()
+
+        if cleaned.startswith("```json"):
+            cleaned = cleaned.replace("```json", "").replace("```", "").strip()
+
+        return json.loads(cleaned)
+
     except Exception as e:
-        logger.error("Failed JSON parse: %s. Raw output: %s", str(e), text)
-        raise HTTPException(status_code=500, detail=f"LLM returned invalid JSON format: {str(e)}")
+        logger.error(f"Failed JSON parse: {e}")
+        logger.error(f"Raw output: {text}")
+
+        raise HTTPException(
+            status_code=500,
+            detail="LLM returned invalid JSON"
+        )
 
 # ROUTE 
 @router.post("/quiz", response_model=QuizResponse)
 async def generate_quiz(
     req: QuizRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
+    difficulty = "medium"
+
+    if req.previous_score > 0:
+        if req.previous_score >= 4:
+            difficulty = "hard"
+        elif req.previous_score <= 2:
+            difficulty = "easy"
     try:
         # Embed query
         query_embedding = gemini_service.get_query_embedding(req.topic)
@@ -77,22 +89,27 @@ async def generate_quiz(
 
         # STRICT PROMPT
         prompt = f"""
-You are an AI tutor. Your task is to generate a quiz specifically about the topic: "{req.topic}".
+You are an adaptive AI tutor.
 
-Generate EXACTLY {req.num_questions} multiple-choice questions.
+Generate EXACTLY {req.num_questions} MCQs.
+
+Difficulty Level: {difficulty}
 
 STRICT RULES:
-- The questions MUST be about "{req.topic}".
-- Use ONLY the context provided below.
-- If the context is about a different subject or does not contain enough information to generate high-quality questions about "{req.topic}" → return ONLY the string "INSUFFICIENT_CONTEXT".
-- DO NOT use outside knowledge to fill gaps.
-- Each question must have 4 options.
-- Include correct answer and explanation.
+- Use ONLY the provided context
+- DO NOT use outside knowledge
+- Questions MUST match the difficulty level
+- Easy = basic understanding
+- Medium = conceptual reasoning
+- Hard = analytical/problem-solving
+- Each question must have 4 options
+- Include explanation
+- Return STRICT JSON ONLY
 
 Context:
 {context}
 
-Return STRICT JSON:
+Return JSON:
 {{
   "questions": [
     {{
@@ -100,7 +117,8 @@ Return STRICT JSON:
       "options": ["A", "B", "C", "D"],
       "answer": "...",
       "explanation": "...",
-      "source": "from context"
+      "source": "context",
+      "difficulty": "{difficulty}"
     }}
   ]
 }}
@@ -109,18 +127,27 @@ Return STRICT JSON:
         # Generate
         response = await gemini_service.generate_response(prompt)
 
-        if "INSUFFICIENT_CONTEXT" in response:
-             raise HTTPException(
-                status_code=400,
-                detail="The archive does not contain enough information on this topic to generate a quiz."
-            )
-
         quiz_data = safe_parse_json(response)
+
+        # Save quiz attempt
+        attempt = QuizAttempt(
+            user_id=current_user.id,
+            topic=req.topic,
+            difficulty=difficulty,
+            score=0
+        )
+
+        db.add(attempt)
+        db.commit()
 
         return {
             "topic": req.topic,
+            "difficulty": difficulty,
             "questions": quiz_data["questions"]
         }
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         logger.error(f"Quiz generation failed: {e}")
