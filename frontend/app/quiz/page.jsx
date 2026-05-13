@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import LayoutWrapper, { useSubject } from '../../components/LayoutWrapper';
-import { generateQuiz as apiGenerateQuiz } from '../../lib/api';
 
 export default function QuizPage() {
   return (
@@ -18,6 +17,8 @@ function QuizUI() {
   const [topic, setTopic] = useState('');
   const [quiz, setQuiz] = useState(null);
   const [answers, setAnswers] = useState({});
+  const [difficulty, setDifficulty] = useState('medium');
+  const [previousScore, setPreviousScore] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -28,11 +29,30 @@ function QuizUI() {
     setLoading(true);
     setError('');
     setQuiz(null);
+    setAnswers({});
     setSubmitted(false);
 
     try {
-      const data = await apiGenerateQuiz(topic, selectedSubject, 5);
+      const res = await fetch('http://localhost:8000/quiz', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('atlas_token')}`,
+        },
+        body: JSON.stringify({
+          topic,
+          subject: selectedSubject,
+          num_questions: 5,
+          previous_score: previousScore,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.detail || 'Failed to generate quiz');
+
       setQuiz(data);
+      setDifficulty(data.difficulty);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -65,13 +85,18 @@ function QuizUI() {
         </p>
       </div>
 
+
       {/* MAIN */}
       <div className="flex-1 overflow-y-auto ethereal-scrollbar px-6 py-10">
         <div className="max-w-4xl mx-auto flex flex-col gap-8">
 
+          <div className="mt-3 inline-flex px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium uppercase tracking-wider">
+            Difficulty: {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
+          </div>
+
           {/* INPUT PANEL */}
           <div className="glass-panel p-6 rounded-2xl border border-outline-variant/15">
-            <div className="flex gap-3 items-center">
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               <input
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
@@ -82,11 +107,11 @@ function QuizUI() {
               <button
                 onClick={generateQuiz}
                 disabled={loading}
-                className={`px-6 py-3 rounded-xl font-label text-sm transition-all
+                className={`px-6 py-3 rounded-xl shadow-lg transition-all
                 ${loading
-                  ? 'bg-surface-container text-on-surface-variant'
-                  : 'bg-primary text-on-primary hover:scale-105 shadow-lg shadow-primary/20'
-                }`}
+                    ? 'bg-surface-container text-on-surface-variant'
+                    : 'bg-primary text-on-primary hover:scale-105'
+                  }`}
               >
                 {loading ? 'Generating...' : 'Generate'}
               </button>
@@ -121,7 +146,11 @@ function QuizUI() {
                       return (
                         <button
                           key={idx}
-                          onClick={() => selectAnswer(i, opt)}
+                          onClick={() => {
+                            if (!submitted) {
+                              selectAnswer(i, opt);
+                            }
+                          }}
                           className={`text-left px-4 py-3 rounded-xl border transition-all
                             ${isSelected ? 'border-primary bg-primary/10' : 'border-outline-variant/20'}
                             ${isCorrect ? 'bg-green-500/10 border-green-400' : ''}
@@ -151,15 +180,41 @@ function QuizUI() {
               {/* SUBMIT BUTTON */}
               {!submitted ? (
                 <button
-                  onClick={() => setSubmitted(true)}
+                  onClick={() => {
+                    if (Object.keys(answers).length === 0) {
+                      setError('Please answer at least one question.');
+                      return;
+                    }
+
+                    setError('');
+
+                    const score = calculateScore();
+
+                    setPreviousScore(score);
+                    setSubmitted(true);
+                  }}
                   className="bg-primary text-on-primary px-6 py-3 rounded-xl shadow-lg hover:scale-105 transition-all"
                 >
                   Submit Quiz
                 </button>
               ) : (
-                <div className="text-center text-xl font-headline text-primary">
+                <div className="glass-panel p-6 rounded-2xl border border-outline-variant/10 text-center">
                   Score: {calculateScore()} / {quiz.questions.length}
                 </div>
+              )}
+
+              {submitted && (
+                <button
+                  onClick={generateQuiz}
+                  disabled={loading}
+                  className={`mt-6 px-6 py-3 rounded-xl shadow-lg transition-all
+                  ${loading
+                      ? 'bg-surface-container text-on-surface-variant'
+                      : 'bg-primary text-on-primary hover:scale-105'
+                    }`}
+                >
+                  Generate Adaptive Follow-Up Quiz
+                </button>
               )}
 
             </div>
