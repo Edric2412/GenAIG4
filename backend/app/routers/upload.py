@@ -7,6 +7,7 @@ from app.services.file_service import file_service
 from app.services.embedding_service import embedding_service
 from app.utils.loader import load_text
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["upload"])
@@ -40,6 +41,9 @@ async def upload_document(
             raise HTTPException(status_code=400, detail="Could not extract text from file.")
             
         doc_id, chunk_count = embedding_service.process_and_store(text, file.filename, subject_name)
+        
+        if not doc_id:
+            doc_id = str(uuid.uuid4())
         
         # 4. Store metadata in Postgres
         new_doc = Document(

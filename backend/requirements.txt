@@ -16,3 +16,6 @@ python-docx
 PyPDF2
 nomic
 pandas
+pytest
+pytest-asyncio
+httpx

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Document, Subject, User
 from app.routers.auth import get_current_user
-from app.services.chroma_service import chroma_service
+from app.services.pinecone_service import pinecone_service
 from app.services.file_service import file_service
 
 router = APIRouter(tags=["library"])
@@ -33,8 +33,8 @@ async def delete_document(document_id: str, db: Session = Depends(get_db), curre
     db.delete(doc)
     db.commit()
     
-    # Delete from Chroma
-    chroma_service.delete_document(document_id)
+    # Delete from Pinecone
+    pinecone_service.delete_document(document_id)
     
     # Delete from Filesystem
     file_service.delete_file(filename)

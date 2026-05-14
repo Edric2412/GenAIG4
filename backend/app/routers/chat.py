@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from typing import Optional
 import logging
 import json
 import asyncio
+from app.utils.evaluator import evaluate_faithfulness, evaluate_context_relevance
 import time
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
 
 @router.post("/chat")
-async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def chat(request: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         start_time = time.time()
         logger.info(f"Chat query by {current_user.email}: {request.message} (Subject: {request.subject})")
@@ -69,10 +70,15 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
         
         # Format context with source metadata
         context_parts = []
-        for doc in relevant_docs:
-            source = doc['metadata'].get('filename', 'Unknown Source')
-            context_parts.append(f"[Source: {source}]\n{doc['text']}")
+        source_map = {}
+        for i, doc in enumerate(relevant_docs, 1):
+            filename = doc['metadata'].get('filename', 'Unknown Source')
+            # Create a short snippet to represent the specific section of the document
+            snippet = doc['text'][:45].replace('\n', ' ').strip() + "..."
+            source_map[i] = f"{filename} | {snippet}"
+            context_parts.append(f"[Source {i}: {filename}]\n{doc['text']}")
         context = "\n\n".join(context_parts)
+        citations_json = json.dumps([v.split(' | ')[0] for v in source_map.values()]) if source_map else "[]"
 
         # 5. Fetch Conversation History (last 5 interactions)
         history = db.query(ChatHistory).filter(
@@ -100,24 +106,9 @@ Current Student Question:
 
 Syllabus Grounding Instructions:
 1. Primary Authority: Your answers must be primarily grounded in the provided archive context. Treat this context as the student's official syllabus.
-2. Citations: Use numbered citations like [^1], [^2], etc., at the end of specific sentences.
-3. MANDATORY SOURCE MAPPING: At the absolute end of your response, you MUST provide a hidden mapping section. This is CRITICAL for the system to work. Follow this EXACT format:
-
----SOURCES---
-1: {{filename}} | {{Specific Topic/Section}}
-2: {{filename}} | {{Specific Topic/Section}}
----END---
-
-- Replace {{filename}} with the actual filename from the context.
-- Replace {{Specific Topic/Section}} with a 3-5 word summary of the content.
-- Ensure every [^n] used in the text has a corresponding entry in this list.
-- Do NOT skip this section even if there is only one source.
-
-4. Interactive Tone: Personalize your explanations by relating new information back to the student's previous questions.
-   - Clearly and explicitly state that this specific topic is not covered in the current archive/syllabus.
-   - You may provide a concise, high-level overview of the external topic to remain helpful, but prioritize brevity for non-syllabus content.
-   - Pivot the conversation back to the syllabus by explaining how the topic relates to, contrasts with, or depends on concepts that ARE in the archive.
-4. Gap Filling: If the syllabus contains related foundational concepts but not the specific answer, use your general knowledge to bridge the gap, but always make the connection to the archive materials explicit.
+2. Citations: You MUST use double-bracketed numbered citations like [[1]], [[2]], etc., at the end of specific sentences to refer to the source provided above. You MUST output each citation individually. DO NOT combine them. Correct: [[1]][[2]]. Incorrect: [[1, 2]].
+3. Interactive Tone: Personalize your explanations by relating new information back to the student's previous questions.
+4. Strict Grounding: If the provided context does not contain the answer, you must strictly reply with 'I cannot answer this based on the provided syllabus' and refuse to answer from general knowledge.
 5. Tone & Persona: Maintain an academic, encouraging, and helpful persona. Maintain clear boundaries between the syllabus and general knowledge.
 """
         
@@ -135,6 +126,15 @@ Syllabus Grounding Instructions:
                 full_response += chunk
                 yield chunk
             
+            # Append source map for frontend to parse citations
+            if source_map:
+                sources_str = "\n\n---SOURCES---\n"
+                for idx, details in source_map.items():
+                    sources_str += f"{idx}: {details}\n"
+                sources_str += "---END---"
+                full_response += sources_str
+                yield sources_str
+            
             total_time = time.time() - start_time
             logger.info(f"RAG Metrics: Embed={embed_time:.3f}s, Retrieve={retrieve_time:.3f}s, Rerank={rerank_time:.3f}s, Total={total_time:.3f}s")
             
@@ -148,13 +148,18 @@ Syllabus Grounding Instructions:
                 db.add(new_chat)
                 db.commit()
                 logger.info(f"Saved chat interaction for conversation {conversation.id}")
+                
+                # Run evaluators via background tasks
+                background_tasks.add_task(evaluate_faithfulness, request.message, context, full_response)
+                background_tasks.add_task(evaluate_context_relevance, request.message, context)
             except Exception as e:
-                logger.error(f"Error saving chat history: {e}")
+                logger.error(f"Error saving chat history or scheduling evaluators: {e}")
 
         return StreamingResponse(
             stream_and_collect(),
             headers={
                 "X-Conversation-ID": str(conversation.id),
+                "X-Citations": citations_json,
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
             },

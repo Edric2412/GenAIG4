@@ -1,9 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import LayoutWrapper, { useSubject } from '../../components/LayoutWrapper';
 
 export default function QuizPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (localStorage.getItem('atlas_role') === 'admin') {
+      router.push('/chat');
+    }
+  }, [router]);
+
   return (
     <LayoutWrapper>
       <QuizUI />

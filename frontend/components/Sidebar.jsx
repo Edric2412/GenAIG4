@@ -45,13 +45,27 @@ const Sidebar = ({ subtext = "The Ethereal Archive", links = [] }) => {
     }
   };
 
-  // Modern Navigation Links including the new Map
-  const navLinks = [
-    { icon: 'chat_bubble', label: 'Tutor Chat', href: '/chat' },
-    { icon: 'library_books', label: 'Library', href: '/library' },
-    { icon: 'quiz', label: 'Adaptive Quiz', href: '/quiz' },
-    { icon: 'language', label: 'Knowledge Universe', href: '/map' },
-  ];
+  const [role, setRole] = React.useState('student');
+
+  React.useEffect(() => {
+    const savedRole = localStorage.getItem('atlas_role');
+    if (savedRole) {
+      setRole(savedRole);
+    }
+  }, []);
+
+  // Modern Navigation Links
+  const navLinks = [];
+
+  if (role !== 'admin') {
+    navLinks.push({ icon: 'chat_bubble', label: 'Tutor Chat', href: '/chat' });
+    navLinks.push({ icon: 'library_books', label: 'Library', href: '/library' });
+    navLinks.push({ icon: 'quiz', label: 'Adaptive Quiz', href: '/quiz' });
+  } else {
+    navLinks.push({ icon: 'upload', label: 'Upload Material', href: '/upload' });
+    navLinks.push({ icon: 'library_books', label: 'Library', href: '/library' });
+    navLinks.push({ icon: 'language', label: 'Knowledge Universe', href: '/map' });
+  }
 
   return (
     <nav className="flex h-full flex-col border-r border-white/5 bg-[#0c1516]/80 backdrop-blur-[25px] w-full rounded-r-2xl shadow-[inset_-1px_0_0_0_rgba(218,228,229,0.05)] z-40 transition-all text-left">

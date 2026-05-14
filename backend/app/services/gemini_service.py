@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 class GeminiService:
     def __init__(self):
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        # Using the requested model gemini-2.5-flash
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        # Using the requested model gemini-3.1-flash-lite
+        self.model = genai.GenerativeModel('gemini-3.1-flash-lite')
         
         # Optimized for a Tutor: High precision, lower creativity
         self.generation_config = {

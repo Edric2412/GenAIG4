@@ -69,6 +69,29 @@ export default function ChatMessage({ message, isLast, loading, onRegenerate }) 
       </span>
     );
   };
+  const renderWithCitations = (children) => {
+    return React.Children.map(children, child => {
+      if (typeof child === 'string') {
+        const parts = child.split(/(\[\[[0-9]+\]\])/g);
+        return parts.map((part, i) => {
+          if (part.startsWith('[[') && part.endsWith(']]')) {
+            const id = part.slice(2, -2);
+            return <Citation key={`cit-${id}-${i}`} id={id} />;
+          }
+          return part;
+        });
+      }
+      if (React.isValidElement(child)) {
+        if (child.props && child.props.children) {
+          return React.cloneElement(child, {
+            ...child.props,
+            children: renderWithCitations(child.props.children)
+          });
+        }
+      }
+      return child;
+    });
+  };
 
   return (
     <div className={`group flex flex-col gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${isTutor ? '' : 'items-end'}`}>
@@ -123,22 +146,11 @@ export default function ChatMessage({ message, isLast, loading, onRegenerate }) 
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
-                  p: ({node, ...props}) => {
-                      const children = React.Children.map(props.children, child => {
-                          if (typeof child === 'string') {
-                              const parts = child.split(/(\[\^[0-9]+\])/g);
-                              return parts.map((part, i) => {
-                                  if (part.startsWith('[^') && part.endsWith(']')) {
-                                      const id = part.slice(2, -1);
-                                      return <Citation key={i} id={id} />;
-                                  }
-                                  return part;
-                              });
-                          }
-                          return child;
-                      });
-                      return <div className="mb-4 last:mb-0">{children}</div>;
-                  }
+                  p: ({node, ...props}) => <div className="mb-4 last:mb-0">{renderWithCitations(props.children)}</div>,
+                  li: ({node, ...props}) => <li className="mb-1">{renderWithCitations(props.children)}</li>,
+                  span: ({node, ...props}) => <span {...props}>{renderWithCitations(props.children)}</span>,
+                  strong: ({node, ...props}) => <strong {...props}>{renderWithCitations(props.children)}</strong>,
+                  em: ({node, ...props}) => <em {...props}>{renderWithCitations(props.children)}</em>
                 }}
               >
                 {displayText}

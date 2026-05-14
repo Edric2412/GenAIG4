@@ -22,7 +22,7 @@ class Subject(Base):
 
 class Document(Base):
     __tablename__ = "documents"
-    id = Column(String, primary_key=True) # Matches ChromaDB doc_id (UUID string)
+    id = Column(String, primary_key=True, default=generate_uuid) # Matches ChromaDB doc_id (UUID string)
     filename = Column(String, nullable=False)
     subject_id = Column(String, ForeignKey("subjects.id"))
     chunk_count = Column(Integer)
