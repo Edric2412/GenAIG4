@@ -4,7 +4,8 @@
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Pinecone](https://img.shields.io/badge/Vector%20DB-Pinecone-231F20?style=for-the-badge&logo=pinecone)](https://www.pinecone.io/)
 [![Cohere](https://img.shields.io/badge/Rerank-Cohere-5C2D91?style=for-the-badge&logo=cohere)](https://cohere.ai/)
-[![Gemini](https://img.shields.io/badge/LLM-Gemini%202.5-4285F4?style=for-the-badge&logo=google-gemini)](https://deepmind.google/technologies/gemini/)
+[![Gemini](https://img.shields.io/badge/LLM-Gemini%203.1%20Flash%20Lite-4285F4?style=for-the-badge&logo=google-gemini)](https://deepmind.google/technologies/gemini/)
+[![Nomic](https://img.shields.io/badge/Visualization-Nomic%20Atlas-20232a?style=for-the-badge)](https://home.nomic.ai/)
 
 Atlas is a state-of-the-art AI Tutoring System that transforms static course curriculums into interactive, 3D visual universes. By combining **Advanced RAG** with **Cross-Encoder Re-ranking**, Atlas provides precise, syllabus-grounded tutoring that adapts to every student's pace.
 
