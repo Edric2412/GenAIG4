@@ -76,7 +76,7 @@ async def generate_quiz(
         difficulty = "Medium"
         if previous_attempts:
             avg_score = sum([a.score / a.total_questions for a in previous_attempts]) / len(previous_attempts)
-            if avg_score > 0.8:
+            if avg_score >= 0.8:
                 difficulty = "Hard"
             elif avg_score < 0.5:
                 difficulty = "Easy"
@@ -130,6 +130,7 @@ STRICT RULES:
 - Use ONLY the context provided below.
 - If the context is about a different subject or does not contain enough information to generate high-quality questions about "{req.topic}" → return ONLY the string "INSUFFICIENT_CONTEXT".
 - DO NOT use outside knowledge to fill gaps.
+- DO NOT ask meta-questions about the text structure itself (e.g., "Which section explains...", "According to the provided text..."). Test the actual academic concepts, not the layout of the document.
 - Each question must have 4 options.
 - Include correct answer and explanation.
 
@@ -171,6 +172,90 @@ Return STRICT JSON:
         logger.error(f"Quiz generation failed: {e}")
         if isinstance(e, HTTPException):
             raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+class TopicInfo(BaseModel):
+    name: str
+    difficulty: str
+    latest_score: Optional[int] = None
+    total_questions: Optional[int] = None
+    latest_difficulty: Optional[str] = None
+
+@router.get("/quiz/topics", response_model=List[TopicInfo])
+async def get_quiz_topics(
+    subject: str = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Fetch chunks from Pinecone to understand the material
+        query_embedding = gemini_service.get_query_embedding("table of contents overview main topics summary")
+        initial_docs = pinecone_service.query_docs(
+            query_embedding=query_embedding,
+            query_text="",
+            subject=subject if subject and subject != "all" else None,
+            n_results=10
+        )
+        
+        if not initial_docs:
+            return []
+
+        context_parts = [doc['text'] for doc in initial_docs]
+        context = "\n\n".join(context_parts)
+
+        prompt = f"""
+Based on the following excerpts from the study material for the subject "{subject}", identify 5 to 8 specific topics that would make good quiz topics.
+Return ONLY a valid JSON array of strings. Example: ["Limits", "Derivatives", "Integration"]
+
+Context:
+{context}
+"""
+        response = await gemini_service.generate_response(prompt)
+        
+        try:
+            topics = safe_parse_json(response)
+            if not isinstance(topics, list):
+                topics = []
+        except:
+            topics = []
+            
+        topic_infos = []
+        for t in topics:
+            attempts = db.query(QuizAttempt).filter(
+                QuizAttempt.user_id == current_user.id,
+                QuizAttempt.topic == t
+            ).order_by(QuizAttempt.created_at.desc()).all()
+            
+            difficulty = "Medium"
+            latest_score = None
+            total_questions = None
+            latest_difficulty = None
+            
+            if attempts:
+                latest = attempts[0]
+                latest_score = latest.score
+                total_questions = latest.total_questions
+                latest_difficulty = latest.difficulty
+                
+                recent_3 = attempts[:3]
+                avg_score = sum([a.score / max(1, a.total_questions) for a in recent_3]) / len(recent_3)
+                if avg_score >= 0.8:
+                    difficulty = "Hard"
+                elif avg_score < 0.5:
+                    difficulty = "Easy"
+            
+            topic_infos.append({
+                "name": t,
+                "difficulty": difficulty,
+                "latest_score": latest_score,
+                "total_questions": total_questions,
+                "latest_difficulty": latest_difficulty
+            })
+            
+        return topic_infos
+
+    except Exception as e:
+        logger.error(f"Failed to fetch quiz topics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/quiz/result")
